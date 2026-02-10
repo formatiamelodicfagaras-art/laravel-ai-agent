@@ -174,13 +174,13 @@ class AgentController extends Controller
 
             // Prețuri 2026 database - căutare inteligentă
             if (file_exists($databases['preturi_2026'])) {
-                $data = $this->excelService->readExcel($databases['preturi_2026']);
+                $data = $this->excelService->readPriceList($databases['preturi_2026']);
                 $totalRows = count($data);
 
                 // Căutare în baza de date după cuvinte cheie
                 $filteredData = [];
                 foreach ($data as $row) {
-                    $rowText = mb_strtolower(implode(' ', array_values($row)));
+                    $rowText = mb_strtolower($row['denumire'] . ' ' . $row['um']);
                     foreach ($keywords as $keyword) {
                         if (mb_strpos($rowText, $keyword) !== false) {
                             $filteredData[] = $row;
@@ -189,16 +189,20 @@ class AgentController extends Controller
                     }
                 }
 
-                $combinedText .= "=== LISTĂ PREȚURI 2026 ===\n";
-                $combinedText .= "Total înregistrări: {$totalRows}\n";
+                $combinedText .= "=== LISTĂ PREȚURI 2026 (PREȚURI CU TVA INCLUS) ===\n";
+                $combinedText .= "IMPORTANT: Prețurile din această listă sunt DEJA cu TVA inclus! NU adăuga TVA din nou!\n";
+                $combinedText .= "Total produse: {$totalRows}\n";
+                $combinedText .= "Denumire\tU.M.\tPreț cu TVA (lei)\n";
 
+                $displayData = count($filteredData) > 0 ? $filteredData : array_slice($data, 0, 15);
                 if (count($filteredData) > 0) {
                     $combinedText .= "Rezultate găsite: " . count($filteredData) . "\n";
-                    $combinedText .= $this->excelService->formatAsText($filteredData);
                 } else {
-                    $combinedText .= "Nu s-au găsit rezultate specifice. Primele 15 înregistrări:\n";
-                    $limitedData = array_slice($data, 0, 15);
-                    $combinedText .= $this->excelService->formatAsText($limitedData);
+                    $combinedText .= "Nu s-au găsit rezultate specifice. Primele 15 produse:\n";
+                }
+
+                foreach ($displayData as $row) {
+                    $combinedText .= sprintf("%s\t%s\t%s lei\n", $row['denumire'], $row['um'], $row['pret_cu_tva']);
                 }
                 $combinedText .= "\n";
             }
@@ -223,11 +227,11 @@ class AgentController extends Controller
             $combinedText .= $this->excelService->getTeraseCalculationInstructions();
             $combinedText .= "\n";
 
-            // Get response from Claude with all databases
-            $answer = $this->claudeService->askQuestion($question, $combinedText);
-
-            // Get current chat history
+            // Get current chat history for conversation context
             $chatHistory = session('chat_history', []);
+
+            // Get response from Claude with all databases and conversation history
+            $answer = $this->claudeService->askQuestion($question, $combinedText, $chatHistory);
 
             // Add new Q&A pair
             $chatHistory[] = [

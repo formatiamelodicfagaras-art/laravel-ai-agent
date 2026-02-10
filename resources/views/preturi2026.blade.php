@@ -229,7 +229,7 @@
                     <td>{{ $index + 1 }}</td>
                     <td class="editable" data-field="denumire">{{ $row['denumire'] }}</td>
                     <td class="editable" data-field="um">{{ $row['um'] }}</td>
-                    <td class="editable" data-field="pret_cu_tva">{{ is_numeric($row['pret_cu_tva']) ? number_format((float)$row['pret_cu_tva'], 2) : $row['pret_cu_tva'] }}</td>
+                    <td class="editable" data-field="pret_cu_tva">{{ is_numeric($row['pret_cu_tva']) ? number_format((float)$row['pret_cu_tva'], 2) : $row['pret_cu_tva'] }} lei</td>
                     <td>
                         <button class="btn-edit" onclick="editRow({{ $index }})">Editează</button>
                         <button class="btn-save" onclick="saveRow({{ $index }})" style="display:none;">Salvează</button>
@@ -270,7 +270,7 @@ function editRow(index) {
         const value = cell.textContent.trim();
         const input = document.createElement('input');
         input.type = field === 'pret_cu_tva' ? 'number' : 'text';
-        input.value = field === 'pret_cu_tva' ? value.replace(/,/g, '').replace(/\s/g, '') : value;
+        input.value = field === 'pret_cu_tva' ? value.replace(/[^0-9.]/g, '') : value;
         if (field === 'pret_cu_tva') {
             input.step = '0.01';
             input.min = '0';
@@ -327,7 +327,7 @@ function saveRow(index) {
                 const field = cell.getAttribute('data-field');
                 const input = cell.querySelector('input');
                 if (field === 'pret_cu_tva') {
-                    cell.textContent = parseFloat(input.value).toFixed(2);
+                    cell.textContent = parseFloat(input.value).toFixed(2) + ' lei';
                 } else {
                     cell.textContent = input.value;
                 }

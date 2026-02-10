@@ -26,19 +26,20 @@ class ClaudeService
      * @return string
      * @throws Exception
      */
-    public function askQuestion(string $question, string $excelData): string
+    public function askQuestion(string $question, string $excelData, array $chatHistory = []): string
     {
         $systemPrompt = "Tu ești un agent AI pentru Style Advertising. Ai acces la TREI baze de date: " .
-            "1. BAZA DE DATE CONTABILITATE - date istorice de vânzări " .
-            "2. LISTĂ PREȚURI 2026 - prețuri actualizate pentru calcule " .
+            "1. BAZA DE DATE CONTABILITATE - date istorice de vânzări (coloane: Vanzator, DataDoc, Client, Articol, UM, Cantitate, Pret fara TVA)\n" .
+            "2. LISTĂ PREȚURI 2026 - prețuri actualizate pentru client final, DEJA CU TVA INCLUS (coloane: Denumire, U.M., Preț cu TVA)\n" .
             "3. BAZA DE DATE CALCULAȚIE TERASE - informații pentru calculații terase.\n\n" .
-            "Datele sunt în format tabel cu coloanele: Vanzator, DataDoc, Client, Articol, UM, Cantitate, Pret fara TVA.\n\n" .
             "INSTRUCȚIUNI IMPORTANTE:\n" .
             "- Răspunde DOAR în limbă română\n" .
             "- Bazează-te STRICT pe datele furnizate - nu inventa informații\n" .
             "- AFIȘEAZĂ TOATE REZULTATELE găsite în date, nu doar primul! Dacă sunt 5 înregistrări, arată toate 5.\n" .
             "- Dacă ceva nu există în date, spune clar: 'Nu am informații în baza de date pentru aceasta.'\n" .
-            "- Când ți se cere un calcul (ex: cost total, preț pentru X unități, suprafață × preț/mp), CALCULEAZĂ AUTOMAT:\n" .
+            "- REGULI CALCUL PREȚURI:\n" .
+            "  * Prețurile din LISTA PREȚURI 2026 sunt DEJA CU TVA INCLUS - NU adăuga TVA din nou!\n" .
+            "  * Prețurile din CONTABILITATE sunt FĂRĂ TVA - dacă clientul cere preț final, adaugă TVA 21%\n" .
             "  * Valoare totală = Cantitate × Preț unitar\n" .
             "  * Preț pentru cantitate custom = Cantitate cerută × Preț unitar\n" .
             "  * Pentru mp/metri liniari: aplică prețul corespunzător\n" .
@@ -46,7 +47,28 @@ class ClaudeService
             "- Prezintă calculele clar, cu formula și rezultatul final\n" .
             "- La final, dacă sunt mai multe rezultate, calculează și TOTALUL GENERAL";
 
+        // Build messages array with conversation history
+        $messages = [];
+
+        // Add previous conversation as context (last 5 exchanges to avoid token limits)
+        $recentHistory = array_slice($chatHistory, -5);
+        foreach ($recentHistory as $exchange) {
+            $messages[] = [
+                'role' => 'user',
+                'content' => $exchange['question']
+            ];
+            $messages[] = [
+                'role' => 'assistant',
+                'content' => $exchange['answer']
+            ];
+        }
+
+        // Add current question with data context
         $userPrompt = "Aici sunt datele:\n\n" . $excelData . "\n\nÎntrebarea:\n" . $question;
+        $messages[] = [
+            'role' => 'user',
+            'content' => $userPrompt
+        ];
 
         try {
             $response = Http::withHeaders([
@@ -57,12 +79,7 @@ class ClaudeService
                 'model' => $this->model,
                 'max_tokens' => $this->maxTokens,
                 'system' => $systemPrompt,
-                'messages' => [
-                    [
-                        'role' => 'user',
-                        'content' => $userPrompt
-                    ]
-                ]
+                'messages' => $messages
             ]);
 
             if (!$response->successful()) {
